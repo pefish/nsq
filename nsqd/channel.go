@@ -305,8 +305,8 @@ func (c *Channel) PutMessage(m *Message) error {
 
 func (c *Channel) put(m *Message) error {
 	select {
-	case c.memoryMsgChan <- m:
-	default:
+	case c.memoryMsgChan <- m: // 推入memoryMsgChan通道，tcp模块监听了此通道，tcp模块会将消息发往各个client
+	default: // 内存队列满了的话，存入磁盘队列
 		b := bufferPoolGet()
 		err := writeMessageToBackend(b, m, c.backend)
 		bufferPoolPut(b)
@@ -542,7 +542,7 @@ func (c *Channel) processDeferredQueue(t int64) bool {
 	dirty := false
 	for {
 		c.deferredMutex.Lock()
-		item, _ := c.deferredPQ.PeekAndShift(t)
+		item, _ := c.deferredPQ.PeekAndShift(t) // 队列第一个元素优先级小于t，就取出来。DeferredQueue中的消息以最小堆的结构存储，优先级最小的在最前面（通俗的讲就是按消息推送时间从小到大排列）
 		c.deferredMutex.Unlock()
 
 		if item == nil {
@@ -551,11 +551,11 @@ func (c *Channel) processDeferredQueue(t int64) bool {
 		dirty = true
 
 		msg := item.Value.(*Message)
-		_, err := c.popDeferredMessage(msg.ID)
+		_, err := c.popDeferredMessage(msg.ID) // 从延迟消息的map中删除此延迟消息
 		if err != nil {
 			goto exit
 		}
-		c.put(msg)
+		c.put(msg) // 推入队列
 	}
 
 exit:

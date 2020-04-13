@@ -14,7 +14,7 @@ func UniqRands(quantity int, maxval int) []int {
 		intSlice[i] = i
 	}
 
-	for i := 0; i < quantity; i++ {
+	for i := 0; i < quantity; i++ { // 洗牌算法
 		j := rand.Int()%maxval + i
 		// swap
 		intSlice[i], intSlice[j] = intSlice[j], intSlice[i]

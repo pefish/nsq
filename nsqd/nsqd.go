@@ -259,12 +259,12 @@ func (n *NSQD) Main() error {
 
 	n.tcpServer.ctx = ctx
 	n.waitGroup.Wrap(func() {
-		exitFunc(protocol.TCPServer(n.tcpListener, n.tcpServer, n.logf))
+		exitFunc(protocol.TCPServer(n.tcpListener, n.tcpServer, n.logf)) // 启动TCP server
 	})
 
 	httpServer := newHTTPServer(ctx, false, n.getOpts().TLSRequired == TLSRequired)
 	n.waitGroup.Wrap(func() {
-		exitFunc(http_api.Serve(n.httpListener, httpServer, "HTTP", n.logf))
+		exitFunc(http_api.Serve(n.httpListener, httpServer, "HTTP", n.logf)) // 启动HTTP server
 	})
 
 	if n.tlsConfig != nil && n.getOpts().HTTPSAddress != "" {
@@ -274,8 +274,8 @@ func (n *NSQD) Main() error {
 		})
 	}
 
-	n.waitGroup.Wrap(n.queueScanLoop)
-	n.waitGroup.Wrap(n.lookupLoop)
+	n.waitGroup.Wrap(n.queueScanLoop) // 使用协程处理DerferdQueue延迟队列以及InFlightQueue超时队列，算法跟Redis过期数据清理算法类似，每轮只取所有topic的channel中的1/4个channel进行协程单独处理
+	n.waitGroup.Wrap(n.lookupLoop)    // 开启lookup相关的loop处理
 	if n.getOpts().StatsdAddress != "" {
 		n.waitGroup.Wrap(n.statsdLoop)
 	}
@@ -348,7 +348,7 @@ func (n *NSQD) LoadMetadata() error {
 			n.logf(LOG_WARN, "skipping creation of invalid topic %s", t.Name)
 			continue
 		}
-		topic := n.GetTopic(t.Name)
+		topic := n.GetTopic(t.Name) // 会启动消息的监听（收到消息就推到channel），会向lookupd查到所有channel并创建他们
 		if t.Paused {
 			topic.Pause()
 		}
@@ -357,7 +357,7 @@ func (n *NSQD) LoadMetadata() error {
 				n.logf(LOG_WARN, "skipping creation of invalid channel %s", c.Name)
 				continue
 			}
-			channel := topic.GetChannel(c.Name)
+			channel := topic.GetChannel(c.Name) // 会填充topic下面的channelMap变量
 			if c.Paused {
 				channel.Pause()
 			}
@@ -478,7 +478,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 	deleteCallback := func(t *Topic) {
 		n.DeleteExistingTopic(t.name)
 	}
-	t = NewTopic(topicName, &context{n}, deleteCallback)
+	t = NewTopic(topicName, &context{n}, deleteCallback) // 会监听消息
 	n.topicMap[topicName] = t
 
 	n.Unlock()
@@ -495,7 +495,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 	// this makes sure that any message received is buffered to the right channels
 	lookupdHTTPAddrs := n.lookupdHTTPAddrs()
 	if len(lookupdHTTPAddrs) > 0 {
-		channelNames, err := n.ci.GetLookupdTopicChannels(t.name, lookupdHTTPAddrs)
+		channelNames, err := n.ci.GetLookupdTopicChannels(t.name, lookupdHTTPAddrs) // 向lookupd查到topic下面的所有channel
 		if err != nil {
 			n.logf(LOG_WARN, "failed to query nsqlookupd for channels to pre-create for topic %s - %s", t.name, err)
 		}
@@ -503,14 +503,14 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 			if strings.HasSuffix(channelName, "#ephemeral") {
 				continue // do not create ephemeral channel with no consumer client
 			}
-			t.GetChannel(channelName)
+			t.GetChannel(channelName) // topic下创建这个channel
 		}
 	} else if len(n.getOpts().NSQLookupdTCPAddresses) > 0 {
 		n.logf(LOG_ERROR, "no available nsqlookupd to query for channels to pre-create for topic %s", t.name)
 	}
 
 	// now that all channels are added, start topic messagePump
-	t.Start()
+	t.Start() // 启动topic
 	return t
 }
 
@@ -657,10 +657,10 @@ func (n *NSQD) queueScanLoop() {
 	closeCh := make(chan int)
 
 	workTicker := time.NewTicker(n.getOpts().QueueScanInterval)
-	refreshTicker := time.NewTicker(n.getOpts().QueueScanRefreshInterval)
+	refreshTicker := time.NewTicker(n.getOpts().QueueScanRefreshInterval) // 刷新channel以及重整pool的定时器
 
-	channels := n.channels()
-	n.resizePool(len(channels), workCh, responseCh, closeCh)
+	channels := n.channels()                                 // 拿到所有channel的chan实例
+	n.resizePool(len(channels), workCh, responseCh, closeCh) // 重整pool大小为所有channel个数的1/4（pool中是1/4 channel个协程监听workCh、responseCh、closeCh）
 
 	for {
 		select {
@@ -682,7 +682,7 @@ func (n *NSQD) queueScanLoop() {
 		}
 
 	loop:
-		for _, i := range util.UniqRands(num, len(channels)) {
+		for _, i := range util.UniqRands(num, len(channels)) { // 随机获取num个channel
 			workCh <- channels[i]
 		}
 

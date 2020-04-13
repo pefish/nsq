@@ -97,26 +97,26 @@ func (n *NSQD) lookupLoop() {
 				n.logf(LOG_INFO, "LOOKUP(%s): adding peer", host)
 				lookupPeer := newLookupPeer(host, n.getOpts().MaxBodySize, n.logf,
 					connectCallback(n, hostname))
-				lookupPeer.Command(nil) // start the connection
+				lookupPeer.Command(nil) // start the connection  // 尝试连接（没有做错误处理？）
 				lookupPeers = append(lookupPeers, lookupPeer)
 				lookupAddrs = append(lookupAddrs, host)
 			}
-			n.lookupPeers.Store(lookupPeers)
+			n.lookupPeers.Store(lookupPeers) // 保存所有lookupd节点
 			connect = false
 		}
 
 		select {
-		case <-ticker:
+		case <-ticker: // 每15s触发
 			// send a heartbeat and read a response (read detects closed conns)
 			for _, lookupPeer := range lookupPeers {
 				n.logf(LOG_DEBUG, "LOOKUPD(%s): sending heartbeat", lookupPeer)
 				cmd := nsq.Ping()
-				_, err := lookupPeer.Command(cmd)
+				_, err := lookupPeer.Command(cmd) // 每15s向每个lookupd发送ping心跳
 				if err != nil {
 					n.logf(LOG_ERROR, "LOOKUPD(%s): %s - %s", lookupPeer, cmd, err)
 				}
 			}
-		case val := <-n.notifyChan:
+		case val := <-n.notifyChan: // NewTopic和NewChannel中会通知这里
 			var cmd *nsq.Command
 			var branch string
 
@@ -128,7 +128,7 @@ func (n *NSQD) lookupLoop() {
 				if channel.Exiting() == true {
 					cmd = nsq.UnRegister(channel.topicName, channel.name)
 				} else {
-					cmd = nsq.Register(channel.topicName, channel.name)
+					cmd = nsq.Register(channel.topicName, channel.name) // 准备注册channel命令
 				}
 			case *Topic:
 				// notify all nsqlookupds that a new topic exists, or that it's removed
@@ -137,18 +137,18 @@ func (n *NSQD) lookupLoop() {
 				if topic.Exiting() == true {
 					cmd = nsq.UnRegister(topic.name, "")
 				} else {
-					cmd = nsq.Register(topic.name, "")
+					cmd = nsq.Register(topic.name, "") // 准备注册topic命令
 				}
 			}
 
 			for _, lookupPeer := range lookupPeers {
 				n.logf(LOG_INFO, "LOOKUPD(%s): %s %s", lookupPeer, branch, cmd)
-				_, err := lookupPeer.Command(cmd)
+				_, err := lookupPeer.Command(cmd) // 向每个lookupd注册
 				if err != nil {
 					n.logf(LOG_ERROR, "LOOKUPD(%s): %s - %s", lookupPeer, cmd, err)
 				}
 			}
-		case <-n.optsNotificationChan:
+		case <-n.optsNotificationChan: // 通过nsqd的http接口动态修改nsqlookupd_tcp_addresses和log_level配置后会触发这里
 			var tmpPeers []*lookupPeer
 			var tmpAddrs []string
 			for _, lp := range lookupPeers {

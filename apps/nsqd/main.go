@@ -61,14 +61,14 @@ func (p *program) Start() error {
 	}
 	cfg.Validate()
 
-	options.Resolve(opts, flagSet, cfg)
+	options.Resolve(opts, flagSet, cfg) // 解析命令行参数
 	nsqd, err := nsqd.New(opts)
 	if err != nil {
 		logFatal("failed to instantiate nsqd - %s", err)
 	}
 	p.nsqd = nsqd
 
-	err = p.nsqd.LoadMetadata()
+	err = p.nsqd.LoadMetadata() // 加载持久化的topic、channel等信息 {"topics":[{"channels":[],"name":"test","paused":false}],"version":"1.2.0"}
 	if err != nil {
 		logFatal("failed to load metadata - %s", err)
 	}
@@ -78,7 +78,7 @@ func (p *program) Start() error {
 	}
 
 	go func() {
-		err := p.nsqd.Main()
+		err := p.nsqd.Main() // 启动主逻辑
 		if err != nil {
 			p.Stop()
 			os.Exit(1)

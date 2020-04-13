@@ -37,7 +37,7 @@ type Options struct {
 
 	QueueScanInterval        time.Duration
 	QueueScanRefreshInterval time.Duration
-	QueueScanSelectionCount  int `flag:"queue-scan-selection-count"`
+	QueueScanSelectionCount  int `flag:"queue-scan-selection-count"` // 每次选择多少个channel进行延迟队列处理
 	QueueScanWorkerPoolMax   int `flag:"queue-scan-worker-pool-max"`
 	QueueScanDirtyPercent    float64
 

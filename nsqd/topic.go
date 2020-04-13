@@ -58,7 +58,7 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 		idFactory:         NewGUIDFactory(ctx.nsqd.getOpts().ID),
 	}
 	// create mem-queue only if size > 0 (do not use unbuffered chan)
-	if ctx.nsqd.getOpts().MemQueueSize > 0 {
+	if ctx.nsqd.getOpts().MemQueueSize > 0 { // MemQueueSize配置大于0的话，开启内存缓存（来了消息不持久化，除非超过缓存大小）
 		t.memoryMsgChan = make(chan *Message, ctx.nsqd.getOpts().MemQueueSize)
 	}
 	if strings.HasSuffix(topicName, "#ephemeral") {
@@ -69,7 +69,7 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 			opts := ctx.nsqd.getOpts()
 			lg.Logf(opts.Logger, opts.LogLevel, lg.LogLevel(level), f, args...)
 		}
-		t.backend = diskqueue.New(
+		t.backend = diskqueue.New( // 初始化磁盘队列
 			topicName,
 			ctx.nsqd.getOpts().DataPath,
 			ctx.nsqd.getOpts().MaxBytesPerFile,
@@ -250,7 +250,7 @@ func (t *Topic) messagePump() {
 	var backendChan <-chan []byte
 
 	// do not pass messages before Start(), but avoid blocking Pause() or GetChannel()
-	for {
+	for { // 等待topic启动
 		select {
 		case <-t.channelUpdateChan:
 			continue
@@ -275,14 +275,14 @@ func (t *Topic) messagePump() {
 	// main message loop
 	for {
 		select {
-		case msg = <-memoryMsgChan:
-		case buf = <-backendChan:
-			msg, err = decodeMessage(buf)
+		case msg = <-memoryMsgChan: // 监听消息
+		case buf = <-backendChan: // 监听消息
+			msg, err = decodeMessage(buf) // 从磁盘中解码出消息
 			if err != nil {
 				t.ctx.nsqd.logf(LOG_ERROR, "failed to decode message - %s", err)
 				continue
 			}
-		case <-t.channelUpdateChan:
+		case <-t.channelUpdateChan: // topic下的channel有更新（新增等等）
 			chans = chans[:0]
 			t.RLock()
 			for _, c := range t.channelMap {
@@ -310,7 +310,7 @@ func (t *Topic) messagePump() {
 			goto exit
 		}
 
-		for i, channel := range chans {
+		for i, channel := range chans { // 复制此消息到topic下面的每个channel
 			chanMsg := msg
 			// copy the message because each channel
 			// needs a unique instance but...
@@ -321,8 +321,8 @@ func (t *Topic) messagePump() {
 				chanMsg.Timestamp = msg.Timestamp
 				chanMsg.deferred = msg.deferred
 			}
-			if chanMsg.deferred != 0 {
-				channel.PutMessageDeferred(chanMsg, chanMsg.deferred)
+			if chanMsg.deferred != 0 { // 如果是延迟消息，就放入延迟队列
+				channel.PutMessageDeferred(chanMsg, chanMsg.deferred) // 这个方法是幂等的，会检查这个消息是否已经在延迟队列，已经在的话就不放了
 				continue
 			}
 			err := channel.PutMessage(chanMsg)
