@@ -542,7 +542,7 @@ func (c *Channel) processDeferredQueue(t int64) bool {
 	dirty := false
 	for {
 		c.deferredMutex.Lock()
-		item, _ := c.deferredPQ.PeekAndShift(t) // 队列第一个元素优先级小于t，就取出来。DeferredQueue中的消息以最小堆的结构存储，优先级最小的在最前面（通俗的讲就是按消息推送时间从小到大排列）
+		item, _ := c.deferredPQ.PeekAndShift(t) // 队列第一个元素优先级小于t，就取出来。DeferredQueue中的消息以最小堆的结构存储，优先级最小的在最前面（通俗的讲就是按消息推送时间从小到大排列），跟timer实现原理类似（所有timer组成一个最小堆）
 		c.deferredMutex.Unlock()
 
 		if item == nil {

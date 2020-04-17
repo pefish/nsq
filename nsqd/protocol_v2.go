@@ -39,8 +39,8 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	var zeroTime time.Time
 
 	clientID := atomic.AddInt64(&p.ctx.nsqd.clientIDSequence, 1)
-	client := newClientV2(clientID, conn, p.ctx)
-	p.ctx.nsqd.AddClient(client.ID, client)
+	client := newClientV2(clientID, conn, p.ctx) // 创建一个client管理这个TCP连接
+	p.ctx.nsqd.AddClient(client.ID, client)      // 保存client
 
 	// synchronize the startup of messagePump in order
 	// to guarantee that it gets a chance to initialize
@@ -48,19 +48,19 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	// and avoid a potential race with IDENTIFY (where a client
 	// could have changed or disabled said attributes)
 	messagePumpStartedChan := make(chan bool)
-	go p.messagePump(client, messagePumpStartedChan)
-	<-messagePumpStartedChan
+	go p.messagePump(client, messagePumpStartedChan) // 开启消息处理协程处理消息
+	<-messagePumpStartedChan                         // 等待上面协程通知是否可以继续往下走
 
 	for {
 		if client.HeartbeatInterval > 0 {
-			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
+			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2)) // 设置tcp连接的读超时
 		} else {
-			client.SetReadDeadline(zeroTime)
+			client.SetReadDeadline(zeroTime) // 没有通过nsqd的ClientTimeout选项设置心跳间隔的话，读超时设置成永不超时
 		}
 
 		// ReadSlice does not allocate new space for the data each request
 		// ie. the returned slice is only valid until the next call to it
-		line, err = client.Reader.ReadSlice('\n')
+		line, err = client.Reader.ReadSlice('\n') // 读出一行
 		if err != nil {
 			if err == io.EOF {
 				err = nil
@@ -73,10 +73,10 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 		// trim the '\n'
 		line = line[:len(line)-1]
 		// optionally trim the '\r'
-		if len(line) > 0 && line[len(line)-1] == '\r' {
+		if len(line) > 0 && line[len(line)-1] == '\r' { // 如果有\r就去掉它
 			line = line[:len(line)-1]
 		}
-		params := bytes.Split(line, separatorBytes)
+		params := bytes.Split(line, separatorBytes) // 空格切分
 
 		p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): [%s] %s", client, params)
 
@@ -232,12 +232,12 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	for {
 		if subChannel == nil || !client.IsReadyForMessages() {
 			// the client is not ready to receive messages...
-			memoryMsgChan = nil
+			memoryMsgChan = nil // 置为nil的话，通道会阻塞
 			backendMsgChan = nil
 			flusherChan = nil
 			// force flush
 			client.writeLock.Lock()
-			err = client.Flush()
+			err = client.Flush() // 将缓存的数据全部写入这个连接
 			client.writeLock.Unlock()
 			if err != nil {
 				goto exit
@@ -246,19 +246,19 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 		} else if flushed {
 			// last iteration we flushed...
 			// do not select on the flusher ticker channel
-			memoryMsgChan = subChannel.memoryMsgChan
-			backendMsgChan = subChannel.backend.ReadChan()
-			flusherChan = nil
-		} else {
+			memoryMsgChan = subChannel.memoryMsgChan       // 连接nsqd开启的channel，有消息就会推送了
+			backendMsgChan = subChannel.backend.ReadChan() // 连接nsqd开启的channel，有消息就会推送了
+			flusherChan = nil                              // 不要flush
+		} else { // channel开始传输了而且没有flush
 			// we're buffered (if there isn't any more data we should flush)...
 			// select on the flusher ticker channel, too
 			memoryMsgChan = subChannel.memoryMsgChan
 			backendMsgChan = subChannel.backend.ReadChan()
-			flusherChan = outputBufferTicker.C
+			flusherChan = outputBufferTicker.C // 一段时间后flush
 		}
 
 		select {
-		case <-flusherChan:
+		case <-flusherChan: // channel开始传输之后，这里定时flush数据到tcp连接
 			// if this case wins, we're either starved
 			// or we won the race between other channels...
 			// in either case, force flush
@@ -270,10 +270,10 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			flushed = true
 		case <-client.ReadyStateChan:
-		case subChannel = <-subEventChan:
+		case subChannel = <-subEventChan: // client发送SUB命令的时候，subEventChan中会收到所订阅的channel
 			// you can't SUB anymore
-			subEventChan = nil
-		case identifyData := <-identifyEventChan:
+			subEventChan = nil  // 使subEventChan再也不能接收消息，限制了一个链接只能订阅一个channel
+		case identifyData := <-identifyEventChan: // consumer经过Identify后会走这里
 			// you can't IDENTIFY anymore
 			identifyEventChan = nil
 
@@ -294,12 +294,12 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 
 			msgTimeout = identifyData.MsgTimeout
-		case <-heartbeatChan:
-			err = p.Send(client, frameTypeResponse, heartbeatBytes)
+		case <-heartbeatChan: // 定时器TCP连接心跳
+			err = p.Send(client, frameTypeResponse, heartbeatBytes) // 发送心跳
 			if err != nil {
 				goto exit
 			}
-		case b := <-backendMsgChan:
+		case b := <-backendMsgChan: // 持久化channel有消息时触发这里
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
@@ -311,27 +311,27 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			msg.Attempts++
 
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // 先存入超时队列，一段时间不ack，会重新入channel
 			client.SendingMessage()
-			err = p.SendMessage(client, msg)
+			err = p.SendMessage(client, msg) // 推送消息
 			if err != nil {
 				goto exit
 			}
 			flushed = false
-		case msg := <-memoryMsgChan:
+		case msg := <-memoryMsgChan: // 内存channel有消息时触发这里
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
 			msg.Attempts++
 
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // 先存入超时队列
 			client.SendingMessage()
-			err = p.SendMessage(client, msg)
+			err = p.SendMessage(client, msg) // 推送消息
 			if err != nil {
 				goto exit
 			}
 			flushed = false
-		case <-client.ExitChan:
+		case <-client.ExitChan: // consumer与nsqd的连接断开后会走这里
 			goto exit
 		}
 	}
@@ -352,7 +352,7 @@ func (p *protocolV2) IDENTIFY(client *clientV2, params [][]byte) ([]byte, error)
 		return nil, protocol.NewFatalClientErr(nil, "E_INVALID", "cannot IDENTIFY in current state")
 	}
 
-	bodyLen, err := readLen(client.Reader, client.lenSlice)
+	bodyLen, err := readLen(client.Reader, client.lenSlice) // 取出body长度
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body size")
 	}
@@ -368,7 +368,7 @@ func (p *protocolV2) IDENTIFY(client *clientV2, params [][]byte) ([]byte, error)
 	}
 
 	body := make([]byte, bodyLen)
-	_, err = io.ReadFull(client.Reader, body)
+	_, err = io.ReadFull(client.Reader, body) // 读出body内容
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body")
 	}
@@ -612,7 +612,7 @@ func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 	// last client can leave the channel between GetChannel() and AddClient().
 	// Avoid adding a client to an ephemeral channel / topic which has started exiting.
 	var channel *Channel
-	for {
+	for {  // 准备topic以及channel
 		topic := p.ctx.nsqd.GetTopic(topicName)
 		channel = topic.GetChannel(channelName)
 		if err := channel.AddClient(client.ID, client); err != nil {
@@ -631,7 +631,7 @@ func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 	atomic.StoreInt32(&client.State, stateSubscribed)
 	client.Channel = channel
 	// update message pump
-	client.SubEventChan <- channel
+	client.SubEventChan <- channel  // SubEventChan被messagePump订阅
 
 	return okBytes, nil
 }
