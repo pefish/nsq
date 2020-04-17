@@ -50,3 +50,4 @@ profile
 
 # vim stuff
 *.sw[op]
+.idea
