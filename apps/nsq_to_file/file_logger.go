@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"io"
 	"os"
 	"path"
@@ -11,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/lg"
 )
 
@@ -19,12 +19,12 @@ type FileLogger struct {
 	logf     lg.AppLogFunc
 	opts     *Options
 	topic    string
-	consumer *nsq.Consumer
+	consumer *client.Consumer
 
 	out            *os.File
 	writer         io.Writer
 	gzipWriter     *gzip.Writer
-	logChan        chan *nsq.Message
+	logChan        chan *client.Message
 	filenameFormat string
 
 	termChan chan bool
@@ -37,13 +37,13 @@ type FileLogger struct {
 	rev      uint
 }
 
-func NewFileLogger(logf lg.AppLogFunc, opts *Options, topic string, cfg *nsq.Config) (*FileLogger, error) {
+func NewFileLogger(logf lg.AppLogFunc, opts *Options, topic string, cfg *client.Config) (*FileLogger, error) {
 	computedFilenameFormat, err := computeFilenameFormat(opts, topic)
 	if err != nil {
 		return nil, err
 	}
 
-	consumer, err := nsq.NewConsumer(topic, opts.Channel, cfg)
+	consumer, err := client.NewConsumer(topic, opts.Channel, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func NewFileLogger(logf lg.AppLogFunc, opts *Options, topic string, cfg *nsq.Con
 		opts:           opts,
 		topic:          topic,
 		consumer:       consumer,
-		logChan:        make(chan *nsq.Message, 1),
+		logChan:        make(chan *client.Message, 1),
 		filenameFormat: computedFilenameFormat,
 		termChan:       make(chan bool),
 		hupChan:        make(chan bool),
@@ -73,7 +73,7 @@ func NewFileLogger(logf lg.AppLogFunc, opts *Options, topic string, cfg *nsq.Con
 	return f, nil
 }
 
-func (f *FileLogger) HandleMessage(m *nsq.Message) error {
+func (f *FileLogger) HandleMessage(m *client.Message) error {
 	m.DisableAutoResponse()
 	f.logChan <- m
 	return nil
@@ -81,7 +81,7 @@ func (f *FileLogger) HandleMessage(m *nsq.Message) error {
 
 func (f *FileLogger) router() {
 	pos := 0
-	output := make([]*nsq.Message, f.opts.MaxInFlight)
+	output := make([]*client.Message, f.opts.MaxInFlight)
 	sync := false
 	ticker := time.NewTicker(f.opts.SyncInterval)
 	closeFile := false

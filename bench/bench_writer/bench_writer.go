@@ -3,14 +3,13 @@ package main
 import (
 	"bufio"
 	"flag"
+	"github.com/nsqio/nsq/client"
 	"log"
 	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/nsqio/go-nsq"
 )
 
 var (
@@ -75,14 +74,14 @@ func pubWorker(td time.Duration, tcpAddr string, batchSize int, batch [][]byte, 
 	if err != nil {
 		panic(err.Error())
 	}
-	conn.Write(nsq.MagicV2)
+	conn.Write(client.MagicV2)
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	rdyChan <- 1
 	<-goChan
 	var msgCount int64
 	endTime := time.Now().Add(td)
 	for {
-		cmd, _ := nsq.MultiPublish(topic, batch)
+		cmd, _ := client.MultiPublish(topic, batch)
 		_, err := cmd.WriteTo(rw)
 		if err != nil {
 			panic(err.Error())
@@ -91,15 +90,15 @@ func pubWorker(td time.Duration, tcpAddr string, batchSize int, batch [][]byte, 
 		if err != nil {
 			panic(err.Error())
 		}
-		resp, err := nsq.ReadResponse(rw)
+		resp, err := client.ReadResponse(rw)
 		if err != nil {
 			panic(err.Error())
 		}
-		frameType, data, err := nsq.UnpackResponse(resp)
+		frameType, data, err := client.UnpackResponse(resp)
 		if err != nil {
 			panic(err.Error())
 		}
-		if frameType == nsq.FrameTypeError {
+		if frameType == client.FrameTypeError {
 			panic(string(data))
 		}
 		msgCount += int64(len(batch))

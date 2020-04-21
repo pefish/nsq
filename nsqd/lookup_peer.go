@@ -3,11 +3,11 @@ package nsqd
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"io"
 	"net"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/lg"
 )
 
@@ -90,7 +90,7 @@ func (lp *lookupPeer) Close() error {
 // reconnecting in the event of a failure.
 //
 // It returns the response from nsqlookupd as []byte
-func (lp *lookupPeer) Command(cmd *nsq.Command) ([]byte, error) {
+func (lp *lookupPeer) Command(cmd *client.Command) ([]byte, error) {
 	initialState := lp.state
 	if lp.state != stateConnected {
 		err := lp.Connect()
@@ -98,7 +98,7 @@ func (lp *lookupPeer) Command(cmd *nsq.Command) ([]byte, error) {
 			return nil, err
 		}
 		lp.state = stateConnected
-		_, err = lp.Write(nsq.MagicV1)
+		_, err = lp.Write(client.MagicV1)
 		if err != nil {
 			lp.Close()
 			return nil, err

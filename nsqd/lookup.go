@@ -3,12 +3,12 @@ package nsqd
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/nsqio/nsq/client"
 	"net"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/version"
 )
 
@@ -21,7 +21,7 @@ func connectCallback(n *NSQD, hostname string) func(*lookupPeer) {
 		ci["hostname"] = hostname
 		ci["broadcast_address"] = n.getOpts().BroadcastAddress
 
-		cmd, err := nsq.Identify(ci)
+		cmd, err := client.Identify(ci)
 		if err != nil {
 			lp.Close()
 			return
@@ -49,15 +49,15 @@ func connectCallback(n *NSQD, hostname string) func(*lookupPeer) {
 		}
 
 		// build all the commands first so we exit the lock(s) as fast as possible
-		var commands []*nsq.Command
+		var commands []*client.Command
 		n.RLock()
 		for _, topic := range n.topicMap {
 			topic.RLock()
 			if len(topic.channelMap) == 0 {
-				commands = append(commands, nsq.Register(topic.name, ""))
+				commands = append(commands, client.Register(topic.name, ""))
 			} else {
 				for _, channel := range topic.channelMap {
-					commands = append(commands, nsq.Register(channel.topicName, channel.name))
+					commands = append(commands, client.Register(channel.topicName, channel.name))
 				}
 			}
 			topic.RUnlock()
@@ -110,14 +110,14 @@ func (n *NSQD) lookupLoop() {
 			// send a heartbeat and read a response (read detects closed conns)
 			for _, lookupPeer := range lookupPeers {
 				n.logf(LOG_DEBUG, "LOOKUPD(%s): sending heartbeat", lookupPeer)
-				cmd := nsq.Ping()
+				cmd := client.Ping()
 				_, err := lookupPeer.Command(cmd) // 每15s向每个lookupd发送ping心跳
 				if err != nil {
 					n.logf(LOG_ERROR, "LOOKUPD(%s): %s - %s", lookupPeer, cmd, err)
 				}
 			}
 		case val := <-n.notifyChan: // NewTopic和NewChannel中会通知这里
-			var cmd *nsq.Command
+			var cmd *client.Command
 			var branch string
 
 			switch val.(type) {
@@ -126,18 +126,18 @@ func (n *NSQD) lookupLoop() {
 				branch = "channel"
 				channel := val.(*Channel)
 				if channel.Exiting() == true {
-					cmd = nsq.UnRegister(channel.topicName, channel.name)
+					cmd = client.UnRegister(channel.topicName, channel.name)
 				} else {
-					cmd = nsq.Register(channel.topicName, channel.name) // 准备注册channel命令
+					cmd = client.Register(channel.topicName, channel.name) // 准备注册channel命令
 				}
 			case *Topic:
 				// notify all nsqlookupds that a new topic exists, or that it's removed
 				branch = "topic"
 				topic := val.(*Topic)
 				if topic.Exiting() == true {
-					cmd = nsq.UnRegister(topic.name, "")
+					cmd = client.UnRegister(topic.name, "")
 				} else {
-					cmd = nsq.Register(topic.name, "") // 准备注册topic命令
+					cmd = client.Register(topic.name, "") // 准备注册topic命令
 				}
 			}
 

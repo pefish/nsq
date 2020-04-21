@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"log"
 	"os"
 	"os/signal"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/bitly/go-hostpool"
 	"github.com/bitly/timer_metrics"
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/app"
 	"github.com/nsqio/nsq/internal/protocol"
 	"github.com/nsqio/nsq/internal/version"
@@ -61,10 +61,10 @@ type PublishHandler struct {
 	counter uint64
 
 	addresses app.StringArray
-	producers map[string]*nsq.Producer
+	producers map[string]*client.Producer
 	mode      int
 	hostPool  hostpool.HostPool
-	respChan  chan *nsq.ProducerTransaction
+	respChan  chan *client.ProducerTransaction
 
 	requireJSONValueParsed   bool
 	requireJSONValueIsNumber bool
@@ -80,7 +80,7 @@ type TopicHandler struct {
 }
 
 func (ph *PublishHandler) responder() {
-	var msg *nsq.Message
+	var msg *client.Message
 	var startTime time.Time
 	var address string
 	var hostPoolResponse hostpool.HostPoolResponse
@@ -88,12 +88,12 @@ func (ph *PublishHandler) responder() {
 	for t := range ph.respChan {
 		switch ph.mode {
 		case ModeRoundRobin:
-			msg = t.Args[0].(*nsq.Message)
+			msg = t.Args[0].(*client.Message)
 			startTime = t.Args[1].(time.Time)
 			hostPoolResponse = nil
 			address = t.Args[2].(string)
 		case ModeHostPool:
-			msg = t.Args[0].(*nsq.Message)
+			msg = t.Args[0].(*client.Message)
 			startTime = t.Args[1].(time.Time)
 			hostPoolResponse = t.Args[2].(hostpool.HostPoolResponse)
 			address = hostPoolResponse.Host()
@@ -198,11 +198,11 @@ func filterMessage(js map[string]interface{}, rawMsg []byte) ([]byte, error) {
 	return newRawMsg, nil
 }
 
-func (t *TopicHandler) HandleMessage(m *nsq.Message) error {
+func (t *TopicHandler) HandleMessage(m *client.Message) error {
 	return t.publishHandler.HandleMessage(m, t.destinationTopic)
 }
 
-func (ph *PublishHandler) HandleMessage(m *nsq.Message, destinationTopic string) error {
+func (ph *PublishHandler) HandleMessage(m *client.Message, destinationTopic string) error {
 	var err error
 	msgBody := m.Body
 
@@ -267,11 +267,11 @@ func hasArg(s string) bool {
 func main() {
 	var selectedMode int
 
-	cCfg := nsq.NewConfig()
-	pCfg := nsq.NewConfig()
+	cCfg := client.NewConfig()
+	pCfg := client.NewConfig()
 
-	flag.Var(&nsq.ConfigFlag{cCfg}, "consumer-opt", "option to passthrough to nsq.Consumer (may be given multiple times, see http://godoc.org/github.com/nsqio/go-nsq#Config)")
-	flag.Var(&nsq.ConfigFlag{pCfg}, "producer-opt", "option to passthrough to nsq.Producer (may be given multiple times, see http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	flag.Var(&client.ConfigFlag{cCfg}, "consumer-opt", "option to passthrough to client.Consumer (may be given multiple times, see http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	flag.Var(&client.ConfigFlag{pCfg}, "producer-opt", "option to passthrough to client.Producer (may be given multiple times, see http://godoc.org/github.com/nsqio/go-nsq#Config)")
 
 	flag.Parse()
 
@@ -319,15 +319,15 @@ func main() {
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 
-	defaultUA := fmt.Sprintf("nsq_to_nsq/%s go-nsq/%s", version.Binary, nsq.VERSION)
+	defaultUA := fmt.Sprintf("nsq_to_nsq/%s go-nsq/%s", version.Binary, client.VERSION)
 
 	cCfg.UserAgent = defaultUA
 	cCfg.MaxInFlight = *maxInFlight
 	pCfg.UserAgent = defaultUA
 
-	producers := make(map[string]*nsq.Producer)
+	producers := make(map[string]*client.Producer)
 	for _, addr := range destNsqdTCPAddrs {
-		producer, err := nsq.NewProducer(addr, pCfg)
+		producer, err := client.NewProducer(addr, pCfg)
 		if err != nil {
 			log.Fatalf("failed creating producer %s", err)
 		}
@@ -350,20 +350,20 @@ func main() {
 		hostPool = hostpool.NewEpsilonGreedy(destNsqdTCPAddrs, 0, &hostpool.LinearEpsilonValueCalculator{})
 	}
 
-	var consumerList []*nsq.Consumer
+	var consumerList []*client.Consumer
 
 	publisher := &PublishHandler{
 		addresses:        destNsqdTCPAddrs,
 		producers:        producers,
 		mode:             selectedMode,
 		hostPool:         hostPool,
-		respChan:         make(chan *nsq.ProducerTransaction, len(destNsqdTCPAddrs)),
+		respChan:         make(chan *client.ProducerTransaction, len(destNsqdTCPAddrs)),
 		perAddressStatus: perAddressStatus,
 		timermetrics:     timer_metrics.NewTimerMetrics(*statusEvery, "[aggregate]:"),
 	}
 
 	for _, topic := range topics {
-		consumer, err := nsq.NewConsumer(topic, *channel, cCfg)
+		consumer, err := client.NewConsumer(topic, *channel, cCfg)
 		consumerList = append(consumerList, consumer)
 		if err != nil {
 			log.Fatal(err)

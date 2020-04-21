@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"io"
 	"io/ioutil"
 	"log"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/bitly/go-hostpool"
 	"github.com/bitly/timer_metrics"
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/app"
 	"github.com/nsqio/nsq/internal/http_api"
 	"github.com/nsqio/nsq/internal/version"
@@ -82,7 +82,7 @@ type PublishHandler struct {
 	timermetrics     *timer_metrics.TimerMetrics
 }
 
-func (ph *PublishHandler) HandleMessage(m *nsq.Message) error {
+func (ph *PublishHandler) HandleMessage(m *client.Message) error {
 	if *sample < 1.0 && rand.Float64() > *sample {
 		return nil
 	}
@@ -171,9 +171,9 @@ func main() {
 	var addresses app.StringArray
 	var selectedMode int
 
-	cfg := nsq.NewConfig()
+	cfg := client.NewConfig()
 
-	flag.Var(&nsq.ConfigFlag{cfg}, "consumer-opt", "option to passthrough to nsq.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	flag.Var(&client.ConfigFlag{cfg}, "consumer-opt", "option to passthrough to client.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
 	flag.Parse()
 
 	httpclient = &http.Client{Transport: http_api.NewDeadlineTransport(*httpConnectTimeout, *httpRequestTimeout), Timeout: *httpRequestTimeout}
@@ -247,10 +247,10 @@ func main() {
 		addresses = getAddrs
 	}
 
-	cfg.UserAgent = fmt.Sprintf("nsq_to_http/%s go-nsq/%s", version.Binary, nsq.VERSION)
+	cfg.UserAgent = fmt.Sprintf("nsq_to_http/%s go-nsq/%s", version.Binary, client.VERSION)
 	cfg.MaxInFlight = *maxInFlight
 
-	consumer, err := nsq.NewConsumer(*topic, *channel, cfg)
+	consumer, err := client.NewConsumer(*topic, *channel, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}

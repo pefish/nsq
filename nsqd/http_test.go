@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 
 	"strings"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/http_api"
 	"github.com/nsqio/nsq/internal/test"
 	"github.com/nsqio/nsq/internal/version"
@@ -158,7 +158,7 @@ func TestHTTPmpubBinary(t *testing.T) {
 	for i := range mpub {
 		mpub[i] = make([]byte, 100)
 	}
-	cmd, _ := nsq.MultiPublish(topicName, mpub)
+	cmd, _ := client.MultiPublish(topicName, mpub)
 	buf := bytes.NewBuffer(cmd.Body)
 
 	url := fmt.Sprintf("http://%s/mpub?topic=%s&binary=true", httpAddr, topicName)
@@ -187,7 +187,7 @@ func TestHTTPmpubForNonNormalizedBinaryParam(t *testing.T) {
 	for i := range mpub {
 		mpub[i] = make([]byte, 100)
 	}
-	cmd, _ := nsq.MultiPublish(topicName, mpub)
+	cmd, _ := client.MultiPublish(topicName, mpub)
 	buf := bytes.NewBuffer(cmd.Body)
 
 	url := fmt.Sprintf("http://%s/mpub?topic=%s&binary=non_normalized_binary_param", httpAddr, topicName)

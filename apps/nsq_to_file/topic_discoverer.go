@@ -1,12 +1,12 @@
 package main
 
 import (
+	"github.com/nsqio/nsq/client"
 	"os"
 	"regexp"
 	"sync"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/clusterinfo"
 	"github.com/nsqio/nsq/internal/http_api"
 	"github.com/nsqio/nsq/internal/lg"
@@ -20,10 +20,10 @@ type TopicDiscoverer struct {
 	hupChan  chan os.Signal
 	termChan chan os.Signal
 	wg       sync.WaitGroup
-	cfg      *nsq.Config
+	cfg      *client.Config
 }
 
-func newTopicDiscoverer(logf lg.AppLogFunc, opts *Options, cfg *nsq.Config, hupChan chan os.Signal, termChan chan os.Signal) *TopicDiscoverer {
+func newTopicDiscoverer(logf lg.AppLogFunc, opts *Options, cfg *client.Config, hupChan chan os.Signal, termChan chan os.Signal) *TopicDiscoverer {
 	client := http_api.NewClient(nil, opts.HTTPClientConnectTimeout, opts.HTTPClientRequestTimeout)
 	return &TopicDiscoverer{
 		logf:     logf,

@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"log"
 	"os"
 	"os/signal"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/mreiferson/go-options"
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/app"
 	"github.com/nsqio/nsq/internal/lg"
 	"github.com/nsqio/nsq/internal/version"
@@ -63,7 +63,7 @@ func flagSet() *flag.FlagSet {
 	fs.Var(&nsqdTCPAddrs, "nsqd-tcp-address", "nsqd TCP address (may be given multiple times)")
 	fs.Var(&lookupdHTTPAddrs, "lookupd-http-address", "lookupd HTTP address (may be given multiple times)")
 	fs.Var(&topics, "topic", "nsq topic (may be given multiple times)")
-	fs.Var(&consumerOpts, "consumer-opt", "option to passthrough to nsq.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	fs.Var(&consumerOpts, "consumer-opt", "option to passthrough to client.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
 
 	return fs
 }
@@ -128,12 +128,12 @@ func main() {
 		opts.WorkDir = opts.OutputDir
 	}
 
-	cfg := nsq.NewConfig()
-	cfgFlag := nsq.ConfigFlag{cfg}
+	cfg := client.NewConfig()
+	cfgFlag := client.ConfigFlag{cfg}
 	for _, opt := range opts.ConsumerOpts {
 		cfgFlag.Set(opt)
 	}
-	cfg.UserAgent = fmt.Sprintf("nsq_to_file/%s go-nsq/%s", version.Binary, nsq.VERSION)
+	cfg.UserAgent = fmt.Sprintf("nsq_to_file/%s go-nsq/%s", version.Binary, client.VERSION)
 	cfg.MaxInFlight = opts.MaxInFlight
 
 	hupChan := make(chan os.Signal)

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"log"
 	"math/rand"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/app"
 	"github.com/nsqio/nsq/internal/version"
 )
@@ -40,7 +40,7 @@ type TailHandler struct {
 	messagesShown int
 }
 
-func (th *TailHandler) HandleMessage(m *nsq.Message) error {
+func (th *TailHandler) HandleMessage(m *client.Message) error {
 	th.messagesShown++
 
 	if *printTopic {
@@ -69,9 +69,9 @@ func (th *TailHandler) HandleMessage(m *nsq.Message) error {
 }
 
 func main() {
-	cfg := nsq.NewConfig()
+	cfg := client.NewConfig()
 
-	flag.Var(&nsq.ConfigFlag{cfg}, "consumer-opt", "option to passthrough to nsq.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	flag.Var(&client.ConfigFlag{cfg}, "consumer-opt", "option to passthrough to client.Consumer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
 	flag.Parse()
 
 	if *showVersion {
@@ -102,14 +102,14 @@ func main() {
 		*maxInFlight = *totalMessages
 	}
 
-	cfg.UserAgent = fmt.Sprintf("nsq_tail/%s go-nsq/%s", version.Binary, nsq.VERSION)
+	cfg.UserAgent = fmt.Sprintf("nsq_tail/%s go-nsq/%s", version.Binary, client.VERSION)
 	cfg.MaxInFlight = *maxInFlight
 
-	consumers := []*nsq.Consumer{}
+	consumers := []*client.Consumer{}
 	for i := 0; i < len(topics); i += 1 {
 		log.Printf("Adding consumer for topic: %s\n", topics[i])
 
-		consumer, err := nsq.NewConsumer(topics[i], *channel, cfg)
+		consumer, err := client.NewConsumer(topics[i], *channel, cfg)
 		if err != nil {
 			log.Fatal(err)
 		}

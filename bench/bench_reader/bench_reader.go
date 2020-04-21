@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"github.com/nsqio/nsq/client"
 	"log"
 	"net"
 	"runtime"
@@ -10,8 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/nsqio/go-nsq"
 )
 
 var (
@@ -72,46 +71,46 @@ func subWorker(td time.Duration, workers int, tcpAddr string, topic string, chan
 	if err != nil {
 		panic(err.Error())
 	}
-	conn.Write(nsq.MagicV2)
+	conn.Write(client.MagicV2)
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	ci := make(map[string]interface{})
 	ci["client_id"] = "test"
-	cmd, _ := nsq.Identify(ci)
+	cmd, _ := client.Identify(ci)
 	cmd.WriteTo(rw)
-	nsq.Subscribe(topic, channel).WriteTo(rw)
+	client.Subscribe(topic, channel).WriteTo(rw)
 	rdyChan <- 1
 	<-goChan
-	nsq.Ready(*rdy).WriteTo(rw)
+	client.Ready(*rdy).WriteTo(rw)
 	rw.Flush()
-	nsq.ReadResponse(rw)
-	nsq.ReadResponse(rw)
+	client.ReadResponse(rw)
+	client.ReadResponse(rw)
 	var msgCount int64
 	go func() {
 		time.Sleep(td)
 		conn.Close()
 	}()
 	for {
-		resp, err := nsq.ReadResponse(rw)
+		resp, err := client.ReadResponse(rw)
 		if err != nil {
 			if strings.Contains(err.Error(), "use of closed network connection") {
 				break
 			}
 			panic(err.Error())
 		}
-		frameType, data, err := nsq.UnpackResponse(resp)
+		frameType, data, err := client.UnpackResponse(resp)
 		if err != nil {
 			panic(err.Error())
 		}
-		if frameType == nsq.FrameTypeError {
+		if frameType == client.FrameTypeError {
 			panic(string(data))
-		} else if frameType == nsq.FrameTypeResponse {
+		} else if frameType == client.FrameTypeResponse {
 			continue
 		}
-		msg, err := nsq.DecodeMessage(data)
+		msg, err := client.DecodeMessage(data)
 		if err != nil {
 			panic(err.Error())
 		}
-		nsq.Finish(msg.ID).WriteTo(rw)
+		client.Finish(msg.ID).WriteTo(rw)
 		msgCount++
 		if float64(msgCount%int64(*rdy)) > float64(*rdy)*0.75 {
 			rw.Flush()

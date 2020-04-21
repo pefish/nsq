@@ -12,9 +12,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mreiferson/go-options v1.0.0
 	github.com/nsqio/go-diskqueue v1.0.0
-	github.com/nsqio/go-nsq v1.0.8
 	golang.org/x/sys v0.0.0-20191224085550-c709ea063b76 // indirect
-	google.golang.org/genproto v0.0.0-20200408120641-fbb3ad325eb7
 )
 
 go 1.13

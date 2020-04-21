@@ -2,15 +2,14 @@ package client_test
 
 import (
 	"flag"
-
-	"github.com/nsqio/go-nsq"
+	"github.com/nsqio/nsq/client"
 )
 
 func ExampleConfigFlag() {
-	cfg := nsq.NewConfig()
+	cfg := client.NewConfig()
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 
-	flagSet.Var(&nsq.ConfigFlag{cfg}, "consumer-opt", "option to pass through to nsq.Consumer (may be given multiple times)")
+	flagSet.Var(&client.ConfigFlag{cfg}, "consumer-opt", "option to pass through to nsq.Consumer (may be given multiple times)")
 	flagSet.PrintDefaults()
 
 	err := flagSet.Parse([]string{

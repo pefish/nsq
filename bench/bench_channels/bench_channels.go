@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 )
 
 var (
@@ -43,45 +43,45 @@ func subWorker(n int, tcpAddr string,
 	if err != nil {
 		panic(err.Error())
 	}
-	conn.Write(nsq.MagicV2)
+	conn.Write(client.MagicV2)
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	ci := make(map[string]interface{})
 	ci["client_id"] = "test"
-	cmd, _ := nsq.Identify(ci)
+	cmd, _ := client.Identify(ci)
 	cmd.WriteTo(rw)
-	nsq.Subscribe(topic, channel).WriteTo(rw)
+	client.Subscribe(topic, channel).WriteTo(rw)
 	rdyCount := 1
 	rdy := rdyCount
 	rdyChan <- 1
 	<-goChan
-	nsq.Ready(rdyCount).WriteTo(rw)
+	client.Ready(rdyCount).WriteTo(rw)
 	rw.Flush()
-	nsq.ReadResponse(rw)
-	nsq.ReadResponse(rw)
+	client.ReadResponse(rw)
+	client.ReadResponse(rw)
 	for {
-		resp, err := nsq.ReadResponse(rw)
+		resp, err := client.ReadResponse(rw)
 		if err != nil {
 			panic(err.Error())
 		}
-		frameType, data, err := nsq.UnpackResponse(resp)
+		frameType, data, err := client.UnpackResponse(resp)
 		if err != nil {
 			panic(err.Error())
 		}
-		if frameType == nsq.FrameTypeError {
+		if frameType == client.FrameTypeError {
 			panic(string(data))
-		} else if frameType == nsq.FrameTypeResponse {
-			nsq.Nop().WriteTo(rw)
+		} else if frameType == client.FrameTypeResponse {
+			client.Nop().WriteTo(rw)
 			rw.Flush()
 			continue
 		}
-		msg, err := nsq.DecodeMessage(data)
+		msg, err := client.DecodeMessage(data)
 		if err != nil {
 			panic(err.Error())
 		}
-		nsq.Finish(msg.ID).WriteTo(rw)
+		client.Finish(msg.ID).WriteTo(rw)
 		rdy--
 		if rdy == 0 {
-			nsq.Ready(rdyCount).WriteTo(rw)
+			client.Ready(rdyCount).WriteTo(rw)
 			rdy = rdyCount
 			rw.Flush()
 		}

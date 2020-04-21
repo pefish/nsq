@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/nsqio/nsq/client"
 	"io"
 	"log"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nsqio/go-nsq"
 	"github.com/nsqio/nsq/internal/app"
 	"github.com/nsqio/nsq/internal/version"
 )
@@ -32,8 +32,8 @@ func init() {
 }
 
 func main() {
-	cfg := nsq.NewConfig()
-	flag.Var(&nsq.ConfigFlag{cfg}, "producer-opt", "option to passthrough to nsq.Producer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
+	cfg := client.NewConfig()
+	flag.Var(&client.ConfigFlag{cfg}, "producer-opt", "option to passthrough to client.Producer (may be given multiple times, http://godoc.org/github.com/nsqio/go-nsq#Config)")
 	rate := flag.Int64("rate", 0, "Throttle messages to n/second. 0 to disable")
 
 	flag.Parse()
@@ -50,14 +50,14 @@ func main() {
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 
-	cfg.UserAgent = fmt.Sprintf("to_nsq/%s go-nsq/%s", version.Binary, nsq.VERSION)
+	cfg.UserAgent = fmt.Sprintf("to_nsq/%s go-nsq/%s", version.Binary, client.VERSION)
 
 	// make the producers
-	producers := make(map[string]*nsq.Producer)
+	producers := make(map[string]*client.Producer)
 	for _, addr := range destNsqdTCPAddrs {
-		producer, err := nsq.NewProducer(addr, cfg)
+		producer, err := client.NewProducer(addr, cfg)
 		if err != nil {
-			log.Fatalf("failed to create nsq.Producer - %s", err)
+			log.Fatalf("failed to create client.Producer - %s", err)
 		}
 		producers[addr] = producer
 	}
@@ -125,7 +125,7 @@ func main() {
 
 // readAndPublish reads to the delim from r and publishes the bytes
 // to the map of producers.
-func readAndPublish(r *bufio.Reader, delim byte, producers map[string]*nsq.Producer) error {
+func readAndPublish(r *bufio.Reader, delim byte, producers map[string]*client.Producer) error {
 	line, readErr := r.ReadBytes(delim)
 
 	if len(line) > 0 {
