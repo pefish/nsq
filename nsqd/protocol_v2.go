@@ -48,7 +48,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	// and avoid a potential race with IDENTIFY (where a client
 	// could have changed or disabled said attributes)
 	messagePumpStartedChan := make(chan bool)
-	go p.messagePump(client, messagePumpStartedChan) // 开启消息处理协程处理消息
+	go p.messagePump(client, messagePumpStartedChan) // 开启消息处理协程处理消息，每个client一个这个协程，所以channel中的消息是随机分发给连接到这个channel的各个client
 	<-messagePumpStartedChan                         // 等待上面协程通知是否可以继续往下走
 
 	for {
@@ -299,7 +299,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			if err != nil {
 				goto exit
 			}
-		case b := <-backendMsgChan: // 持久化channel有消息时触发这里
+		case b := <-backendMsgChan: // 持久化channel有消息时触发这里，因为这里是select case的随机选择，所以nsq推送不保证顺序
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
@@ -311,9 +311,9 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			msg.Attempts++
 
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // 先存入超时队列，一段时间不ack，会重新入channel
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // 先存入超时队列，一段时间不ack，会重新入channel。所以能保证可靠
 			client.SendingMessage()
-			err = p.SendMessage(client, msg) // 推送消息
+			err = p.SendMessage(client, msg) // TCP长连接推送消息。可以看出nsq是使用推模式
 			if err != nil {
 				goto exit
 			}
