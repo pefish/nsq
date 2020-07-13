@@ -270,7 +270,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			flushed = true
 		case <-client.ReadyStateChan:
-		case subChannel = <-subEventChan: // client发送SUB命令的时候，subEventChan中会收到所订阅的channel
+		case subChannel = <-subEventChan: // client发送SUB命令的时候，subEventChan中会收到所订阅的channel，然后这个channel下的内存队列以及持久化队列会被本协程监听
 			// you can't SUB anymore
 			subEventChan = nil  // 使subEventChan再也不能接收消息，限制了一个链接只能订阅一个channel
 		case identifyData := <-identifyEventChan: // consumer经过Identify后会走这里

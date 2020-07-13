@@ -478,7 +478,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 	deleteCallback := func(t *Topic) {
 		n.DeleteExistingTopic(t.name)
 	}
-	t = NewTopic(topicName, &context{n}, deleteCallback) // 会监听消息
+	t = NewTopic(topicName, &context{n}, deleteCallback) // 每个topic会监听生产者发过来的消息，监听到后会复制给topic下每个channel
 	n.topicMap[topicName] = t
 
 	n.Unlock()

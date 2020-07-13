@@ -23,8 +23,8 @@ type Topic struct {
 
 	name              string
 	channelMap        map[string]*Channel
-	backend           BackendQueue
-	memoryMsgChan     chan *Message
+	backend           BackendQueue  // 接收生产者消息的持久化队列
+	memoryMsgChan     chan *Message  // 接收生产者消息的内存队列
 	startChan         chan int
 	exitChan          chan int
 	channelUpdateChan chan int
